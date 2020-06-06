@@ -8,8 +8,24 @@
 
 all: bfst bfst.exe
 
+TESTPATH=bfst_test
+TESTURI=$(USER)@localhost/$(TESTPATH)
+test: bfst
+	- rm -rf ~/$(TESTPATH)
+	./bfst $(TESTURI) init
+	dd if=/dev/zero of=/tmp/zero.dat bs=1M count=400
+	./bfst $(TESTURI) put /tmp/zero.dat
+	./bfst $(TESTURI) ls
+
+test2: bfst
+	cp bfst ~/$(TESTPATH)
+	cd ~/$(TESTPATH); ./bfst .get <~/test2.txt
+
+test3: bfst
+	./bfst $(TESTURI) get *.dat
+
 bfst: $(wildcard *.go)
-	go build -o bfst
+	go build -ldflags="-s -w" -o bfst
 
 bfst.exe: $(wildcard *.go)
-	GOOS=windows GOARCH=386 CGO_ENABLED=1 CXX=i686-w64-mingw32-g++ CC=i686-w64-mingw32-gcc go build -o bfst.exe
+	GOOS=windows GOARCH=386 CGO_ENABLED=1 CXX=i686-w64-mingw32-g++ CC=i686-w64-mingw32-gcc go build -ldflags="-s -w" -o bfst.exe
