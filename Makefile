@@ -13,7 +13,7 @@ TESTURI=$(USER)@localhost/$(TESTPATH)
 test: bfst
 	- rm -rf ~/$(TESTPATH)
 	./bfst $(TESTURI) init
-	dd if=/dev/zero of=/tmp/zero.dat bs=1M count=400
+	dd if=/dev/zero of=/tmp/zero.dat bs=1M count=4200
 	./bfst $(TESTURI) put /tmp/zero.dat
 	./bfst $(TESTURI) ls
 

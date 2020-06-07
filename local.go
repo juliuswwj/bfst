@@ -118,10 +118,9 @@ func cmdInit(uri *URI) int {
 	if strings.Index(string(ret), hash) < 0 {
 		println("E: bfst data error")
 		return 8
-	} else {
-		// remove lock
-		ssh(uri, "rm index.l", nil)
 	}
+	// remove lock
+	ssh(uri, "rm index.l", nil)
 	return 0
 }
 
@@ -166,9 +165,9 @@ func cmdPut(uri *URI, files []string) int {
 		result := []string{fn, fmt.Sprint(size)}
 
 		// put file blocks
-		mcnt := (int(size) + len(buf) - 1) / len(buf)
+		mcnt := int((size + int64(len(buf)-1)) / int64(len(buf)))
 		cnt := 1
-		bsz := int(size)
+		var bsz int
 		for cnt <= mcnt {
 			fmt.Printf("\r%s %d/%d    ", fn, cnt, mcnt)
 			cnt++
@@ -257,7 +256,7 @@ func (fi *fileInfo) download(uri *URI) {
 	println("")
 
 	off, _ := f.Seek(0, os.SEEK_CUR)
-	if int(off) != fi.size {
+	if off != fi.size {
 		println("E: size not equal")
 		return
 	}
@@ -279,9 +278,9 @@ func cmdGet(uri *URI, filter []string) int {
 				file.download(uri)
 			}
 			file = &fileInfo{name: ts[0]}
-			file.size, _ = strconv.Atoi(ts[1])
-			tm, _ := strconv.Atoi(ts[2])
-			file.mtime = time.Unix(int64(tm), 0)
+			file.size, _ = strconv.ParseInt(ts[1], 10, 64)
+			tm, _ := strconv.ParseInt(ts[2], 10, 64)
+			file.mtime = time.Unix(tm, 0)
 		}
 		if len(ts) == 1 && len(ts[0]) == 64 {
 			// blockhash

@@ -94,7 +94,7 @@ func showFile(index map[string]int, file string, mtime string) {
 type fileInfo struct {
 	name   string
 	mtime  time.Time
-	size   int
+	size   int64
 	blocks []string
 }
 
@@ -106,11 +106,11 @@ func (fi *fileInfo) read(index map[string]int, indexFile string) {
 
 	fi.blocks = strings.Split(string(dat), "\n")
 
-	size := 0
+	var size int64
 	for _, hash := range fi.blocks {
 		sz, ok := index[hash]
 		if ok {
-			size += sz
+			size += int64(sz)
 		}
 	}
 	fi.size = size
@@ -219,18 +219,18 @@ func remoteFile(lines []string) int {
 	}
 
 	// cal size
-	size := 0
+	var size int64
 	for _, hash := range lines[2:] {
 		bsz, ok := index[hash]
 		if !ok {
 			fmt.Fprintln(os.Stderr, "E: unknown block")
 			return 3
 		}
-		size += bsz
+		size += int64(bsz)
 	}
 
 	// verify size
-	osize, _ := strconv.Atoi(lines[1])
+	osize, _ := strconv.ParseInt(lines[1], 10, 64)
 	if size != osize {
 		fmt.Fprintln(os.Stderr, "E: file has wrong size")
 		return 5
