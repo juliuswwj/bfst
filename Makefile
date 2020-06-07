@@ -17,13 +17,6 @@ test: bfst
 	./bfst $(TESTURI) put /tmp/zero.dat
 	./bfst $(TESTURI) ls
 
-test2: bfst
-	cp bfst ~/$(TESTPATH)
-	cd ~/$(TESTPATH); ./bfst .get <~/test2.txt
-
-test3: bfst
-	./bfst $(TESTURI) get *.dat
-
 bfst: $(wildcard *.go)
 	go build -ldflags="-s -w" -o bfst
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -52,7 +53,12 @@ func ssh(uri *URI, cmd string, stdin io.Reader) ([]byte, error) {
 	p.Stdin = stdin
 	stdout := &bytes.Buffer{}
 	p.Stdout = stdout
+	stderr := &bytes.Buffer{}
+	p.Stderr = stderr
 	err := p.Run()
+	if err != nil {
+		return nil, errors.New(string(stderr.Bytes()))
+	}
 	return stdout.Bytes(), err
 }
 
@@ -174,7 +180,7 @@ func cmdPut(uri *URI, files []string) int {
 				}
 				break
 			}
-			rhash := sha256.Sum256(buf)
+			rhash := sha256.Sum256(buf[:bsz])
 			hash := hex.EncodeToString(rhash[:])
 
 			osz, has := index[hash]
@@ -192,7 +198,7 @@ func cmdPut(uri *URI, files []string) int {
 		f.Close()
 		println("")
 		if err != nil {
-			println("E: failed to send data " + err.Error())
+			println(err.Error())
 			continue
 		}
 		ssh(uri, "./bfst .file", strings.NewReader(strings.Join(result, "\n")))
