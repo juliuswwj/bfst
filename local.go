@@ -53,13 +53,12 @@ func ssh(uri *URI, cmd string, stdin io.Reader) ([]byte, error) {
 	p.Stdin = stdin
 	stdout := &bytes.Buffer{}
 	p.Stdout = stdout
-	stderr := &bytes.Buffer{}
-	p.Stderr = stderr
+	p.Stderr = stdout
 	err := p.Run()
 	if err != nil {
-		return nil, errors.New(string(stderr.Bytes()))
+		return nil, errors.New(string(stdout.Bytes()))
 	}
-	return stdout.Bytes(), err
+	return stdout.Bytes(), nil
 }
 
 func cmdInit(uri *URI) int {
@@ -73,23 +72,22 @@ func cmdInit(uri *URI) int {
 	if len(uri.path) > 0 {
 		subdir += "/" + uri.path
 	}
-	if strings.HasSuffix(str, subdir) {
-		println("E: path exists")
-		return 5
+	if !strings.HasSuffix(str, subdir) {
+		// run mkdir in home directory
+		ssh(uri, "mkdir -p "+uri.path, nil)
 	}
-	// run mkdir in home directory
-	ssh(uri, "mkdir -p "+uri.path, nil)
 
 	// touch files in target directory
-	ssh(uri, "touch index index.o index.l", nil)
+	ssh(uri, "echo >index; touch "+LOCKFILE, nil)
 
 	// index files are created?
 	ret, err = ssh(uri, "ls", nil)
-	if err != nil || strings.Index(string(ret), "index.l") < 0 {
+	if err != nil || strings.Index(string(ret), LOCKFILE) < 0 {
 		println("E: init failed")
 		return 6
 	}
 
+	print("push bfst ...")
 	// push bfst to directory
 	elf, err := os.Open("bfst")
 	defer elf.Close()
@@ -119,8 +117,24 @@ func cmdInit(uri *URI) int {
 		println("E: bfst data error")
 		return 8
 	}
+	println("")
+
+	// call bfst build
+	cnt := 0
+	for i := 0; i < 256; i++ {
+		fmt.Printf("\rinit=%d count=%d  ", i, cnt)
+		ret, err := ssh(uri, "./bfst .init", strings.NewReader(fmt.Sprintf("%02x", i)))
+		if err != nil {
+			println("E: .init error " + err.Error())
+			return 1
+		}
+		//println(string(ret))
+		cnt += strings.Count(string(ret), " ok")
+	}
+	println("")
+
 	// remove lock
-	ssh(uri, "rm index.l", nil)
+	ssh(uri, "rm "+LOCKFILE, nil)
 	return 0
 }
 
@@ -166,12 +180,10 @@ func cmdPut(uri *URI, files []string) int {
 
 		// put file blocks
 		mcnt := int((size + int64(len(buf)-1)) / int64(len(buf)))
-		cnt := 1
+		cnt1 := 0
+		cnt2 := 0
 		var bsz int
-		for cnt <= mcnt {
-			fmt.Printf("\r%s %d/%d    ", fn, cnt, mcnt)
-			cnt++
-
+		for (cnt1 + cnt2) <= mcnt {
 			bsz, err = f.Read(buf)
 			if err != nil || bsz <= 0 {
 				if err == io.EOF {
@@ -183,6 +195,13 @@ func cmdPut(uri *URI, files []string) int {
 			hash := hex.EncodeToString(rhash[:])
 
 			osz, has := index[hash]
+			if has {
+				cnt1++
+			} else {
+				cnt2++
+			}
+			fmt.Printf("\r%s %d+%d/%d  ", fn, cnt1, cnt2, mcnt)
+
 			if !has {
 				_, err = ssh(uri, "./bfst ."+hash, bytes.NewBuffer(buf[:bsz]))
 				if err != nil {
@@ -200,7 +219,10 @@ func cmdPut(uri *URI, files []string) int {
 			println(err.Error())
 			continue
 		}
-		ssh(uri, "./bfst .file", strings.NewReader(strings.Join(result, "\n")))
+		_, err = ssh(uri, "./bfst .file", strings.NewReader(strings.Join(result, "\n")))
+		if err != nil {
+			println("E: .file command " + err.Error())
+		}
 	}
 	return 0
 }

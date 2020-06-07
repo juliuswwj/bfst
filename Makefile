@@ -11,11 +11,18 @@ all: bfst bfst.exe
 TESTPATH=bfst_test
 TESTURI=$(USER)@localhost/$(TESTPATH)
 test: bfst
-	- rm -rf ~/$(TESTPATH)
+	#- rm -rf ~/$(TESTPATH)
 	./bfst $(TESTURI) init
 	dd if=/dev/zero of=/tmp/zero.dat bs=1M count=4200
 	./bfst $(TESTURI) put /tmp/zero.dat
 	./bfst $(TESTURI) ls
+
+test2: bfst
+	cp bfst ~/$(TESTPATH)
+	cd ~/$(TESTPATH); ./bfst .init <~/test2.txt
+
+copy: bfst bfst.exe
+	cp bfst bfst.exe /srv/test
 
 bfst: $(wildcard *.go)
 	go build -ldflags="-s -w" -o bfst

@@ -180,6 +180,55 @@ func listFiles(filter []string) []*fileInfo {
 	return result
 }
 
+func remoteInit(lines []string) int {
+	if len(lines[0]) != 2 {
+		fmt.Fprintln(os.Stderr, "E: wrong init id")
+		return 1
+	}
+	index := readIndex(nil)
+	dirs, err := ioutil.ReadDir(lines[0])
+	if err != nil {
+		// no dir
+		return 0
+	}
+	if index == nil {
+		fmt.Fprintln(os.Stderr, "E: no index")
+		return 1
+	}
+	for _, dir := range dirs {
+		path := lines[0] + "/" + dir.Name()
+		if len(path) != 5 {
+			continue
+		}
+		files, err := ioutil.ReadDir(path)
+		if err != nil {
+			continue
+		}
+		for _, file := range files {
+			fpath := path + "/" + file.Name()
+			if len(fpath) != 66 {
+				os.Remove(fpath)
+				continue
+			}
+			print(fpath)
+			bs, err := ioutil.ReadFile(fpath)
+			if err != nil {
+				os.Remove(fpath)
+				continue
+			}
+			rhash := sha256.Sum256(bs)
+			hash := hex.EncodeToString(rhash[:])
+			if hash[:2] != fpath[:2] || hash[2:4] != fpath[3:5] || hash[4:] != fpath[6:] {
+				continue
+			}
+			println(" ok")
+			index[hash] = len(bs)
+		}
+	}
+	writeIndex(index)
+	return 0
+}
+
 func remoteLs(filter []string) int {
 	for _, file := range listFiles(filter) {
 		fmt.Printf("%-20s %-12d %s\n", strings.ReplaceAll(file.mtime.Format(time.RFC3339)[:19], "T", " "), file.size, file.name)
@@ -299,6 +348,9 @@ func remote(cmd string) int {
 
 	case "rm":
 		return remoteRm(lines)
+
+	case "init":
+		return remoteInit(lines)
 
 	default:
 		{
