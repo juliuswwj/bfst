@@ -4,65 +4,17 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
-type URI struct {
-	user, host, port, path string
-}
-
-func parseURI(str string) *URI {
-	uri := new(URI)
-	n := strings.Index(str, "/")
-	if n > 0 {
-		uri.path = str[n+1:]
-		str = str[:n]
-	}
-	n = strings.LastIndex(str, ":")
-	if n > 0 {
-		uri.port = str[n+1:]
-		str = str[:n]
-	}
-	n = strings.Index(str, "@")
-	if n < 0 {
-		return nil
-	}
-	uri.user = str[:n]
-	uri.host = str[n+1:]
-	return uri
-}
-
-func ssh(uri *URI, cmd string, stdin io.Reader) ([]byte, error) {
-	cmds := []string{"-T", "-C"}
-	if uri.port != "" {
-		cmds = append(cmds, "-p", uri.port)
-	}
-	if uri.path != "" {
-		cmd = "cd " + uri.path + "; " + cmd
-	}
-	cmds = append(cmds, uri.user+"@"+uri.host, cmd)
-	p := exec.Command("ssh", cmds...)
-	p.Stdin = stdin
-	stdout := &bytes.Buffer{}
-	p.Stdout = stdout
-	p.Stderr = stdout
-	err := p.Run()
-	if err != nil {
-		return nil, errors.New(string(stdout.Bytes()))
-	}
-	return stdout.Bytes(), nil
-}
-
 func cmdInit(uri *URI) int {
-	ret, err := ssh(uri, "pwd", nil)
+	ret, err := uri.ssh("pwd", nil)
 	if err != nil {
 		println("E: ssh failed")
 		return 4
@@ -74,14 +26,14 @@ func cmdInit(uri *URI) int {
 	}
 	if !strings.HasSuffix(str, subdir) {
 		// run mkdir in home directory
-		ssh(uri, "mkdir -p "+uri.path, nil)
+		uri.ssh("mkdir -p "+uri.path, nil)
 	}
 
 	// touch files in target directory
-	ssh(uri, "echo >index; touch "+LOCKFILE, nil)
+	uri.ssh("echo >index; touch "+LOCKFILE, nil)
 
 	// index files are created?
-	ret, err = ssh(uri, "ls", nil)
+	ret, err = uri.ssh("ls", nil)
 	if err != nil || strings.Index(string(ret), LOCKFILE) < 0 {
 		println("E: init failed")
 		return 6
@@ -95,7 +47,7 @@ func cmdInit(uri *URI) int {
 		println("E: no bfst")
 		return 7
 	}
-	ret, err = ssh(uri, "cat >bfst; chmod 755 bfst; sha256sum bfst", elf)
+	ret, err = uri.ssh("cat >bfst; chmod 755 bfst; sha256sum bfst", elf)
 	if err != nil {
 		println("E: push bfst")
 		return 7
@@ -123,7 +75,7 @@ func cmdInit(uri *URI) int {
 	cnt := 0
 	for i := 0; i < 256; i++ {
 		fmt.Printf("\rinit=%d count=%d  ", i, cnt)
-		ret, err := ssh(uri, "./bfst .init", strings.NewReader(fmt.Sprintf("%02x", i)))
+		ret, err := uri.ssh("./bfst .init", strings.NewReader(fmt.Sprintf("%02x", i)))
 		if err != nil {
 			println("E: .init error " + err.Error())
 			return 1
@@ -134,13 +86,12 @@ func cmdInit(uri *URI) int {
 	println("")
 
 	// remove lock
-	ssh(uri, "rm "+LOCKFILE, nil)
+	uri.ssh("rm "+LOCKFILE, nil)
 	return 0
 }
 
 func cmdLs(uri *URI, flags []string) int {
-	// call remoteLs
-	ret, err := ssh(uri, "./bfst .ls ", strings.NewReader(strings.Join(flags, "\n")))
+	ret, err := uri.dir(flags)
 	if err != nil {
 		println("E: ssh failed or not init")
 		return 4
@@ -203,7 +154,7 @@ func cmdPut(uri *URI, files []string) int {
 			fmt.Printf("\r%s %d+%d/%d  ", fn, cnt1, cnt2, mcnt)
 
 			if !has {
-				_, err = ssh(uri, "./bfst ."+hash, bytes.NewBuffer(buf[:bsz]))
+				_, err = uri.ssh("./bfst ."+hash, bytes.NewBuffer(buf[:bsz]))
 				if err != nil {
 					break
 				}
@@ -219,7 +170,7 @@ func cmdPut(uri *URI, files []string) int {
 			println(err.Error())
 			continue
 		}
-		_, err = ssh(uri, "./bfst .file", strings.NewReader(strings.Join(result, "\n")))
+		_, err = uri.ssh("./bfst .file", strings.NewReader(strings.Join(result, "\n")))
 		if err != nil {
 			println("E: .file command " + err.Error())
 		}
@@ -244,7 +195,7 @@ func (fi *fileInfo) download(uri *URI) {
 			println("E: create cachedir " + path)
 			return nil
 		}
-		bs, err = ssh(uri, "cat "+fpath, nil)
+		bs, err = uri.read(fpath)
 		if err != nil {
 			println("E: download block " + hash)
 			return nil
@@ -285,7 +236,7 @@ func (fi *fileInfo) download(uri *URI) {
 }
 
 func cmdGet(uri *URI, filter []string) int {
-	ret, err := ssh(uri, "./bfst .get", strings.NewReader(strings.Join(filter, "\n")))
+	ret, err := uri.get(filter)
 	if err != nil {
 		println(string(ret))
 		return 1
@@ -316,7 +267,7 @@ func cmdGet(uri *URI, filter []string) int {
 }
 
 func cmdRm(uri *URI, files []string) int {
-	ret, err := ssh(uri, "./bfst .rm", strings.NewReader(strings.Join(files, "\n")))
+	ret, err := uri.ssh("./bfst .rm", strings.NewReader(strings.Join(files, "\n")))
 	if err != nil {
 		println(string(ret))
 		return 1
