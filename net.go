@@ -227,7 +227,7 @@ func (uri *URI) runRemote(cmd string, stdin []byte) ([]byte, error) {
 				if b != nil {
 					uri.ecnt = 0
 					if len(b) > 3 && string(b[:3]) == "E: " {
-						return nil, errors.New(string(b[:3]))
+						return nil, errors.New(string(b[3:]))
 					}
 					return b, nil
 				}
@@ -393,9 +393,9 @@ func (uri *URI) ls(flags []string) ([]byte, error) {
 
 	case "file":
 		{
-			files := uri.localListFiles(flags)
-			if files == nil {
-				return nil, errors.New("listFiles error")
+			files, err := uri.localListFiles(flags)
+			if err != nil {
+				return nil, err
 			}
 			ret := ""
 			for _, file := range files {
@@ -416,9 +416,9 @@ func (uri *URI) getIndex(flags []string) ([]byte, error) {
 
 	case "file":
 		{
-			files := uri.localListFiles(flags)
-			if files == nil {
-				return nil, errors.New("listFiles error")
+			files, err := uri.localListFiles(flags)
+			if err != nil {
+				return nil, err
 			}
 			ret := ""
 			for _, file := range files {
@@ -505,13 +505,13 @@ func (uri *URI) rm(flags []string) ([]byte, error) {
 
 	case "file":
 		{
-			files := uri.localListFiles(flags)
-			if files == nil {
-				return nil, errors.New("listFiles error")
+			files, err := uri.localListFiles(flags)
+			if err != nil {
+				return nil, err
 			}
 			ret := ""
 			for _, file := range files {
-				os.Remove(uri.path + "/index." + file.name)
+				os.Remove(uri.path + "/" + file.name + ".idx")
 				ret += fmt.Sprintf("%s removed\n", file.name)
 			}
 			return []byte(ret), nil

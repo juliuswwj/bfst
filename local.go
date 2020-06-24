@@ -107,12 +107,15 @@ func (fi *fileInfo) download(uri *URI) error {
 	return nil
 }
 
-func (uri *URI) localListFiles(filter []string) []*fileInfo {
+func (uri *URI) localListFiles(filter []string) ([]*fileInfo, error) {
 	index := uri.allIndex()
+	if index == nil {
+		return nil, errors.New("no index")
+	}
 	files, err := ioutil.ReadDir(uri.path)
 	//println("readdir", len(index), len(files), err)
-	if index == nil || err != nil {
-		return nil
+	if err != nil {
+		return nil, err
 	}
 
 	var regs []*regexp.Regexp
@@ -169,7 +172,7 @@ func (uri *URI) localListFiles(filter []string) []*fileInfo {
 			result = append(result, fi)
 		}
 	}
-	return result
+	return result, nil
 }
 
 func (uri *URI) localWriteIndex(index map[string]int) error {
